@@ -1,30 +1,50 @@
 "use client"
 
 import type React from "react"
-
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Github } from "lucide-react"
+import { login } from "@/lib/auth"
+
+const AUTH_MESSAGES: Record<string, string> = {
+  session_expired: "Your session has expired. Please log in again.",
+  forbidden:
+    "Access denied (403). The employee portal requires a user (employee) account — not an admin account. Please log in with the correct credentials.",
+}
 
 export default function LoginPage() {
   const router = useRouter()
-  const [email, setEmail] = useState("")
+  const searchParams = useSearchParams()
+  const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Show banner if redirected from an auth error
+  useEffect(() => {
+    const reason = searchParams.get("error")
+    if (reason && AUTH_MESSAGES[reason]) {
+      setError(AUTH_MESSAGES[reason])
+    }
+  }, [searchParams])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
+    setError(null)
 
-    // Simulate login
-    setTimeout(() => {
-      localStorage.setItem("user", JSON.stringify({ email, name: "Jane Doe" }))
+    try {
+      await login(username, password)
       router.push("/dashboard")
-    }, 500)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Login failed. Please check your credentials.")
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -44,12 +64,12 @@ export default function LoginPage() {
 
         <form onSubmit={handleLogin} className="space-y-5">
           <div>
-            <label className="block text-sm font-medium text-white mb-2">Email Address</label>
+            <label className="block text-sm font-medium text-white mb-2">Username</label>
             <Input
-              type="email"
-              placeholder="name@company.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              type="text"
+              placeholder="your_username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               required
               className="bg-[#1f2937] border-gray-700 text-white placeholder-gray-500"
             />
@@ -74,19 +94,29 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-300"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-300 cursor-pointer"
               >
                 {showPassword ? "🙈" : "👁️"}
               </button>
             </div>
           </div>
 
+          {/* Error message */}
+          {error && (
+            <div className={`rounded-lg px-4 py-3 text-sm ${error.startsWith("Access denied")
+                ? "bg-orange-900/30 border border-orange-700/50 text-orange-300"
+                : "bg-red-900/30 border border-red-700/50 text-red-400"
+              }`}>
+              {error}
+            </div>
+          )}
+
           <Button
             type="submit"
             disabled={isLoading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 cursor-pointer"
           >
-            {isLoading ? "Logging in..." : "Login"}
+            {isLoading ? "Logging in…" : "Login"}
           </Button>
         </form>
 
@@ -99,15 +129,15 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <Button className="w-full bg-[#1f2937] hover:bg-[#2d3748] text-white border border-gray-700 font-semibold py-2">
+        <Button className="w-full bg-[#1f2937] hover:bg-[#2d3748] text-white border border-gray-700 font-semibold py-2 cursor-pointer">
           <Github className="w-5 h-5 mr-2" />
           Sign in with GitHub
         </Button>
 
         <p className="text-center text-gray-400 text-sm mt-6">
           Don&apos;t have an account?{" "}
-          <Link href="#" className="text-blue-500 hover:text-blue-400 font-medium">
-            Request Access
+          <Link href="/register" className="text-blue-500 hover:text-blue-400 font-medium">
+            Register
           </Link>
         </p>
 

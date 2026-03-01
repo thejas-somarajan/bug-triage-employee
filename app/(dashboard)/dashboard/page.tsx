@@ -1,57 +1,53 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import { Card } from "@/components/ui/card"
-import { TrendingUp, AlertCircle } from "lucide-react"
+import { TrendingUp, AlertCircle, Loader2 } from "lucide-react"
+import { getMyTasks, updateTaskStatus } from "@/lib/tasks"
+import { useNotifications } from "@/hooks/use-notifications"
+import type { ProjectWithTasks, TaskStatus } from "@/lib/types"
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
-type SprintStatus = "To Do" | "Doing" | "Done"
+type SprintStatus = "To Do" | "Doing" | "Done" | "Review"
 
 interface SprintItem {
-  id: string
+  id: string          // display id e.g. "#12"
+  issueId: number     // real API id for updates
   title: string
   status: SprintStatus
-  assignee: string
   priority: string
+  projectName: string
 }
 
-// ─── Static data ───────────────────────────────────────────────────────────────
-const statsData = [
-  { title: "Open Issues", value: "12", change: "+12 this week", icon: AlertCircle, color: "text-blue-500" },
-  { title: "Pull Requests", value: "5", change: "2 waiting for review", icon: "🔀", color: "text-purple-500" },
-  { title: "Code Review", value: "3", change: "Assignments", icon: "🎯", color: "text-orange-500" },
-  { title: "Efficiency", value: "94%", change: "Top 10%", icon: TrendingUp, color: "text-green-500" },
-]
+// ─── Status mapping ────────────────────────────────────────────────────────────
+function apiStatusToSprint(s: TaskStatus): SprintStatus {
+  switch (s) {
+    case "IN_PROGRESS": return "Doing"
+    case "DONE": return "Done"
+    case "REVIEW": return "Review"
+    default: return "To Do"
+  }
+}
 
-const initialSprintData: SprintItem[] = [
-  { id: "#1824", title: "Fix Login API timeout on slow connections", status: "To Do", assignee: "JD", priority: "bug" },
-  { id: "#1045", title: "Update documentation for v2.0 release", status: "To Do", assignee: "JD", priority: "feat" },
-  { id: "#1052", title: "Clean up unused assets in public folder", status: "To Do", assignee: "JD", priority: "chore" },
-  { id: "#1033", title: "Refactor CSS Grid Layout for responsiveness", status: "Doing", assignee: "JD", priority: "refactor" },
-  { id: "#1040", title: "Memory leak in data parser", status: "Doing", assignee: "JD", priority: "critical" },
-  { id: "#1003", title: "Initial project scaffolding", status: "Done", assignee: "JD", priority: "setup" },
-]
-
-const activeProjects = [
-  { name: "Q4 Web Redesign", progress: 75, deadline: "Oct 30" },
-  { name: "Mobile API Migration", progress: 30, deadline: "Nov 15" },
-  { name: "Security Audit", progress: 10, deadline: "Dec 01" },
-]
-
-const notifications = [
-  { type: "assign", message: "Alex assigned you to #42", time: "10 min ago", avatar: "A" },
-  { type: "error", message: "Build failed: main-branch", time: "1 hour ago" },
-  { type: "success", message: "Pull Request #99 merged", time: "3 hours ago" },
-  { type: "comment", message: "Sarah commented on #33", time: "Yesterday" },
-]
+function sprintStatusToApi(s: SprintStatus): TaskStatus {
+  switch (s) {
+    case "Doing": return "IN_PROGRESS"
+    case "Done": return "DONE"
+    case "Review": return "REVIEW"
+    default: return "UNASSIGNED"
+  }
+}
 
 // ─── Priority badge colours ────────────────────────────────────────────────────
 const priorityColours: Record<string, string> = {
+  HIGH: "bg-red-600/20 text-red-400 border border-red-600/30",
+  MEDIUM: "bg-yellow-600/20 text-yellow-400 border border-yellow-600/30",
+  LOW: "bg-gray-600/20 text-gray-400 border border-gray-600/30",
+  CRITICAL: "bg-red-700/30 text-red-300 border border-red-700/40",
   bug: "bg-red-600/20 text-red-400 border border-red-600/30",
   feat: "bg-blue-600/20 text-blue-400 border border-blue-600/30",
   chore: "bg-gray-600/20 text-gray-400 border border-gray-600/30",
   refactor: "bg-yellow-600/20 text-yellow-400 border border-yellow-600/30",
-  critical: "bg-red-700/30 text-red-300 border border-red-700/40",
   setup: "bg-green-600/20 text-green-400 border border-green-600/30",
 }
 
@@ -60,12 +56,13 @@ const columnAccent: Record<SprintStatus, string> = {
   "To Do": "border-t-blue-500",
   Doing: "border-t-yellow-500",
   Done: "border-t-green-500",
+  Review: "border-t-purple-500",
 }
-
 const columnDotColour: Record<SprintStatus, string> = {
   "To Do": "bg-blue-500",
   Doing: "bg-yellow-500",
   Done: "bg-green-500",
+  Review: "bg-purple-500",
 }
 
 // ─── Confirmation Dialog ───────────────────────────────────────────────────────
@@ -87,11 +84,9 @@ function ConfirmDialog({ cardTitle, from, to, onConfirm, onCancel }: ConfirmDial
         className="bg-[#151b2e] border border-gray-700 rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6 animate-in fade-in zoom-in-95 duration-200"
         style={{ boxShadow: "0 25px 60px rgba(0,0,0,0.6)" }}
       >
-        {/* Icon */}
         <div className="flex items-center justify-center w-12 h-12 rounded-full bg-blue-600/20 border border-blue-600/30 mx-auto mb-4">
           <span className="text-2xl">📋</span>
         </div>
-
         <h3 className="text-white text-lg font-bold text-center mb-1">Move Task?</h3>
         <p className="text-gray-400 text-sm text-center mb-5 leading-relaxed">
           Are you sure you want to move&nbsp;
@@ -101,7 +96,6 @@ function ConfirmDialog({ cardTitle, from, to, onConfirm, onCancel }: ConfirmDial
           &nbsp;→&nbsp;
           <span className="font-semibold text-green-400">{to}</span>?
         </p>
-
         <div className="flex gap-3">
           <button
             onClick={onCancel}
@@ -123,31 +117,69 @@ function ConfirmDialog({ cardTitle, from, to, onConfirm, onCancel }: ConfirmDial
 
 // ─── Main page ─────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
-  const [sprintData, setSprintData] = useState<SprintItem[]>(initialSprintData)
+  const [sprintData, setSprintData] = useState<SprintItem[]>([])
+  const [projects, setProjects] = useState<ProjectWithTasks[]>([])
+  const [isTasksLoading, setIsTasksLoading] = useState(true)
+  const [tasksError, setTasksError] = useState<string | null>(null)
+
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [dragOverColumn, setDragOverColumn] = useState<SprintStatus | null>(null)
-
-  // Dialog state
   const [pending, setPending] = useState<{ id: string; to: SprintStatus } | null>(null)
+  const dragCounter = useRef<Record<string, number>>({})
 
-  const dragCounter = useRef<Record<string, number>>({})  // per-column enter/leave counter
+  const { notifications, markRead } = useNotifications()
+
+  // ── Fetch tasks on mount ─────────────────────────────────────────────────────
+  useEffect(() => {
+    async function fetchTasks() {
+      try {
+        const data = await getMyTasks()
+        setProjects(data)
+        // Flatten all tasks from all projects into sprint items
+        const items: SprintItem[] = data.flatMap((proj) =>
+          proj.tasks.map((t) => ({
+            id: `#${t.id}`,
+            issueId: t.id,
+            title: t.title,
+            status: apiStatusToSprint(t.status),
+            priority: t.priority,
+            projectName: proj.project_name,
+          }))
+        )
+        setSprintData(items)
+      } catch (err) {
+        setTasksError(err instanceof Error ? err.message : "Failed to load tasks")
+      } finally {
+        setIsTasksLoading(false)
+      }
+    }
+    fetchTasks()
+  }, [])
+
+  // ── Derived stats ─────────────────────────────────────────────────────────────
+  const openCount = sprintData.filter((t) => t.status === "To Do").length
+  const doingCount = sprintData.filter((t) => t.status === "Doing").length
+  const reviewCount = sprintData.filter((t) => t.status === "Review").length
+  const doneCount = sprintData.filter((t) => t.status === "Done").length
+  const efficiency = sprintData.length > 0
+    ? Math.round((doneCount / sprintData.length) * 100)
+    : 0
+
+  const statsData = [
+    { title: "Open Issues", value: String(openCount), change: `${doingCount} in progress`, icon: AlertCircle, color: "text-blue-500" },
+    { title: "In Review", value: String(reviewCount), change: "Awaiting review", icon: "🔀", color: "text-purple-500" },
+    { title: "Completed", value: String(doneCount), change: "Tasks done", icon: "🎯", color: "text-orange-500" },
+    { title: "Efficiency", value: `${efficiency}%`, change: "Done / total tasks", icon: TrendingUp, color: "text-green-500" },
+  ]
 
   // ── Drag handlers ────────────────────────────────────────────────────────────
-  function handleDragStart(id: string) {
-    setDraggedId(id)
-  }
-
-  function handleDragEnd() {
-    setDraggedId(null)
-    setDragOverColumn(null)
-    dragCounter.current = {}
-  }
+  function handleDragStart(id: string) { setDraggedId(id) }
+  function handleDragEnd() { setDraggedId(null); setDragOverColumn(null); dragCounter.current = {} }
 
   function handleColumnDragEnter(status: SprintStatus) {
     dragCounter.current[status] = (dragCounter.current[status] ?? 0) + 1
     setDragOverColumn(status)
   }
-
   function handleColumnDragLeave(status: SprintStatus) {
     dragCounter.current[status] = (dragCounter.current[status] ?? 1) - 1
     if (dragCounter.current[status] <= 0) {
@@ -155,41 +187,42 @@ export default function DashboardPage() {
       setDragOverColumn((prev) => (prev === status ? null : prev))
     }
   }
-
   function handleColumnDrop(toStatus: SprintStatus) {
     setDragOverColumn(null)
     dragCounter.current = {}
-
     if (!draggedId) return
-
     const card = sprintData.find((c) => c.id === draggedId)
-    if (!card) return
-    if (card.status === toStatus) {
-      setDraggedId(null)
-      return
-    }
-
-    // Show confirmation dialog instead of moving immediately
+    if (!card || card.status === toStatus) { setDraggedId(null); return }
     setPending({ id: draggedId, to: toStatus })
     setDraggedId(null)
   }
 
-  function confirmMove() {
+  const confirmMove = useCallback(async () => {
     if (!pending) return
+    const prevData = sprintData
+    // Optimistic update
     setSprintData((prev) =>
       prev.map((c) => (c.id === pending.id ? { ...c, status: pending.to } : c))
     )
     setPending(null)
-  }
+    // Persist to API
+    const card = prevData.find((c) => c.id === pending.id)
+    if (card) {
+      try {
+        await updateTaskStatus(card.issueId, sprintStatusToApi(pending.to))
+      } catch {
+        // Revert on failure
+        setSprintData(prevData)
+      }
+    }
+  }, [pending, sprintData])
 
-  function cancelMove() {
-    setPending(null)
-  }
+  function cancelMove() { setPending(null) }
 
-  // ── Derive dialog info ───────────────────────────────────────────────────────
   const pendingCard = pending ? sprintData.find((c) => c.id === pending.id) : null
+  const COLUMNS: SprintStatus[] = ["To Do", "Doing", "Review", "Done"]
 
-  // ── Render ───────────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────────
   return (
     <>
       {/* Confirmation Dialog */}
@@ -232,86 +265,91 @@ export default function DashboardPage() {
               Sprint Board
               <span className="ml-2 text-xs text-gray-500 font-normal italic">drag cards between columns</span>
             </h2>
-            <div className="grid grid-cols-3 gap-4">
-              {(["To Do", "Doing", "Done"] as SprintStatus[]).map((status) => {
-                const colCards = sprintData.filter((d) => d.status === status)
-                const isOver = dragOverColumn === status
 
-                return (
-                  <div
-                    key={status}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDragEnter={() => handleColumnDragEnter(status)}
-                    onDragLeave={() => handleColumnDragLeave(status)}
-                    onDrop={() => handleColumnDrop(status)}
-                    className={`rounded-xl p-4 border-t-2 transition-all duration-200 ${columnAccent[status]} ${isOver
-                        ? "bg-[#1c2540] border border-blue-500/50 shadow-lg shadow-blue-500/5 scale-[1.01]"
-                        : "bg-[#151b2e] border border-gray-700/50"
-                      }`}
-                  >
-                    {/* Column header */}
-                    <div className="flex items-center gap-2 mb-4">
-                      <span className={`w-2 h-2 rounded-full ${columnDotColour[status]}`} />
-                      <h3 className="font-semibold text-white text-sm">{status}</h3>
-                      <span className="ml-auto bg-gray-700 text-gray-300 text-xs rounded-full px-2 py-0.5 font-medium">
-                        {colCards.length}
-                      </span>
-                    </div>
+            {/* Loading / Error states */}
+            {isTasksLoading && (
+              <div className="flex items-center gap-3 text-gray-400 py-16 justify-center">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Loading your tasks…
+              </div>
+            )}
+            {tasksError && !isTasksLoading && (
+              <div className="bg-red-900/20 border border-red-700/40 rounded-xl p-6 text-red-400 text-sm text-center">
+                {tasksError}
+              </div>
+            )}
 
-                    {/* Drop zone hint */}
-                    {isOver && colCards.length === 0 && (
-                      <div className="border-2 border-dashed border-blue-500/40 rounded-lg p-4 flex items-center justify-center text-blue-400/60 text-xs mb-3">
-                        Drop here
+            {!isTasksLoading && !tasksError && (
+              <div className="grid grid-cols-4 gap-3">
+                {COLUMNS.map((status) => {
+                  const colCards = sprintData.filter((d) => d.status === status)
+                  const isOver = dragOverColumn === status
+                  return (
+                    <div
+                      key={status}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDragEnter={() => handleColumnDragEnter(status)}
+                      onDragLeave={() => handleColumnDragLeave(status)}
+                      onDrop={() => handleColumnDrop(status)}
+                      className={`rounded-xl p-3 border-t-2 transition-all duration-200 ${columnAccent[status]} ${isOver
+                          ? "bg-[#1c2540] border border-blue-500/50 shadow-lg shadow-blue-500/5 scale-[1.01]"
+                          : "bg-[#151b2e] border border-gray-700/50"
+                        }`}
+                    >
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className={`w-2 h-2 rounded-full ${columnDotColour[status]}`} />
+                        <h3 className="font-semibold text-white text-xs">{status}</h3>
+                        <span className="ml-auto bg-gray-700 text-gray-300 text-xs rounded-full px-2 py-0.5 font-medium">
+                          {colCards.length}
+                        </span>
                       </div>
-                    )}
 
-                    {/* Cards */}
-                    <div className="space-y-3 min-h-[60px]">
-                      {colCards.map((item) => {
-                        const isDragging = draggedId === item.id
-                        return (
-                          <div
-                            key={item.id}
-                            draggable
-                            onDragStart={() => handleDragStart(item.id)}
-                            onDragEnd={handleDragEnd}
-                            className={`bg-[#0f1419] border rounded-xl p-3 transition-all duration-150 select-none group ${isDragging
-                                ? "opacity-40 scale-95 border-blue-500/50 shadow-lg shadow-blue-500/10"
-                                : "border-gray-700 hover:border-gray-500 hover:shadow-md hover:shadow-black/30 cursor-grab active:cursor-grabbing"
-                              }`}
-                            style={{ cursor: isDragging ? "grabbing" : "grab" }}
-                          >
-                            {/* Drag handle hint */}
-                            <div className="flex items-start gap-2 mb-2">
-                              <span className="text-gray-600 group-hover:text-gray-400 transition-colors mt-0.5 text-xs select-none">
-                                ⠿
-                              </span>
-                              <p className="text-sm text-gray-300 leading-snug flex-1">{item.title}</p>
-                            </div>
-                            <div className="flex items-center justify-between text-xs pl-4">
-                              <span className="text-gray-500 font-mono">{item.id}</span>
-                              <span
-                                className={`px-2 py-0.5 rounded-md text-xs font-medium capitalize ${priorityColours[item.priority] ?? "bg-gray-700 text-gray-300"
-                                  }`}
-                              >
-                                {item.priority}
-                              </span>
-                            </div>
-                          </div>
-                        )
-                      })}
-
-                      {/* Drop zone hint when column has cards */}
-                      {isOver && colCards.length > 0 && (
-                        <div className="border-2 border-dashed border-blue-500/30 rounded-lg p-2 flex items-center justify-center text-blue-400/50 text-xs">
+                      {isOver && colCards.length === 0 && (
+                        <div className="border-2 border-dashed border-blue-500/40 rounded-lg p-3 flex items-center justify-center text-blue-400/60 text-xs mb-2">
                           Drop here
                         </div>
                       )}
+
+                      <div className="space-y-2 min-h-[60px]">
+                        {colCards.map((item) => {
+                          const isDragging = draggedId === item.id
+                          return (
+                            <div
+                              key={item.id}
+                              draggable
+                              onDragStart={() => handleDragStart(item.id)}
+                              onDragEnd={handleDragEnd}
+                              className={`bg-[#0f1419] border rounded-xl p-3 transition-all duration-150 select-none group ${isDragging
+                                  ? "opacity-40 scale-95 border-blue-500/50 shadow-lg shadow-blue-500/10"
+                                  : "border-gray-700 hover:border-gray-500 hover:shadow-md hover:shadow-black/30 cursor-grab active:cursor-grabbing"
+                                }`}
+                              style={{ cursor: isDragging ? "grabbing" : "grab" }}
+                            >
+                              <div className="flex items-start gap-2 mb-2">
+                                <span className="text-gray-600 group-hover:text-gray-400 transition-colors mt-0.5 text-xs select-none">⠿</span>
+                                <p className="text-xs text-gray-300 leading-snug flex-1">{item.title}</p>
+                              </div>
+                              <div className="flex items-center justify-between text-xs pl-4">
+                                <span className="text-gray-500 font-mono text-[10px]">{item.id}</span>
+                                <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-medium uppercase ${priorityColours[item.priority] ?? "bg-gray-700 text-gray-300"
+                                  }`}>
+                                  {item.priority}
+                                </span>
+                              </div>
+                            </div>
+                          )
+                        })}
+                        {isOver && colCards.length > 0 && (
+                          <div className="border-2 border-dashed border-blue-500/30 rounded-lg p-2 flex items-center justify-center text-blue-400/50 text-xs">
+                            Drop here
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )
-              })}
-            </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
 
           {/* Sidebar */}
@@ -323,25 +361,36 @@ export default function DashboardPage() {
                 Active Projects
               </h3>
               <div className="space-y-3">
-                {activeProjects.map((project, idx) => (
-                  <div key={idx} className="bg-[#151b2e] border border-gray-700 rounded-lg p-4">
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="w-8 h-8 rounded bg-blue-600 flex items-center justify-center text-white text-sm">
-                        📦
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-white font-medium text-sm">{project.name}</p>
-                        <p className="text-gray-400 text-xs">Deadline: {project.deadline}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 bg-gray-700 rounded-full h-2">
-                        <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${project.progress}%` }} />
-                      </div>
-                      <span className="text-white text-sm font-medium">{project.progress}%</span>
-                    </div>
+                {isTasksLoading && (
+                  <div className="flex items-center gap-2 text-gray-500 text-sm">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Loading…
                   </div>
-                ))}
+                )}
+                {!isTasksLoading && projects.map((proj) => {
+                  const done = proj.tasks.filter((t) => t.status === "DONE").length
+                  const total = proj.tasks.length
+                  const pct = total > 0 ? Math.round((done / total) * 100) : 0
+                  return (
+                    <div key={proj.project_id} className="bg-[#151b2e] border border-gray-700 rounded-lg p-4">
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="w-8 h-8 rounded bg-blue-600 flex items-center justify-center text-white text-sm">📦</div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-white font-medium text-sm truncate">{proj.project_name}</p>
+                          <p className="text-gray-400 text-xs">{done}/{total} tasks done</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 bg-gray-700 rounded-full h-2">
+                          <div className="bg-blue-600 h-2 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="text-white text-sm font-medium">{pct}%</span>
+                      </div>
+                    </div>
+                  )
+                })}
+                {!isTasksLoading && projects.length === 0 && !tasksError && (
+                  <p className="text-gray-500 text-sm">No active projects</p>
+                )}
               </div>
             </div>
 
@@ -352,27 +401,25 @@ export default function DashboardPage() {
                 Notifications
               </h3>
               <div className="space-y-3">
-                {notifications.map((notif, idx) => (
-                  <div key={idx} className="bg-[#151b2e] border border-gray-700 rounded-lg p-4">
+                {notifications.length === 0 && (
+                  <p className="text-gray-500 text-sm">No notifications</p>
+                )}
+                {notifications.slice(0, 5).map((notif) => (
+                  <button
+                    key={notif.id}
+                    onClick={() => { if (!notif.read) markRead(notif.id) }}
+                    className={`w-full text-left bg-[#151b2e] border border-gray-700 rounded-lg p-4 hover:bg-[#1f2937] transition cursor-pointer ${notif.read ? "opacity-60" : ""
+                      }`}
+                  >
                     <div className="flex items-start gap-3">
-                      <div
-                        className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${notif.type === "assign"
-                            ? "bg-blue-600 text-white"
-                            : notif.type === "error"
-                              ? "bg-red-600/20 text-red-400"
-                              : notif.type === "success"
-                                ? "bg-green-600/20 text-green-400"
-                                : "bg-gray-600 text-white"
-                          }`}
-                      >
-                        {notif.avatar || (notif.type === "error" ? "⚠️" : notif.type === "success" ? "✓" : "💬")}
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-white text-sm">{notif.message}</p>
-                        <p className="text-gray-500 text-xs">{notif.time}</p>
+                      <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${notif.read ? "bg-gray-600" : "bg-blue-500"}`} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white text-sm font-semibold truncate">{notif.subject}</p>
+                        <p className="text-gray-400 text-xs mt-0.5 line-clamp-2">{notif.content}</p>
+                        <p className="text-gray-500 text-xs mt-1">{notif.sender_name}</p>
                       </div>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>

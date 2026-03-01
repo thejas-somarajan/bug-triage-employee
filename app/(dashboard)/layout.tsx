@@ -6,6 +6,7 @@ import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import { isAuthenticated } from "@/lib/auth"
 
 export default function DashboardLayout({
   children,
@@ -16,8 +17,7 @@ export default function DashboardLayout({
   const [isLoaded, setIsLoaded] = useState(false)
 
   useEffect(() => {
-    const user = localStorage.getItem("user")
-    if (!user) {
+    if (!isAuthenticated()) {
       router.push("/login")
     } else {
       setIsLoaded(true)

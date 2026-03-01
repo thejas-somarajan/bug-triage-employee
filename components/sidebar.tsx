@@ -4,20 +4,18 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { LayoutDashboard, Github, GitPullRequest, Settings, LogOut, LayoutGrid } from "lucide-react"
 import { useState, useEffect } from "react"
+import { logout, getUser } from "@/lib/auth"
 
 export function Sidebar() {
   const pathname = usePathname()
   const [user, setUser] = useState<any>(null)
 
   useEffect(() => {
-    const userData = localStorage.getItem("user")
-    if (userData) {
-      setUser(JSON.parse(userData))
-    }
+    setUser(getUser())
   }, [])
 
   const handleLogout = () => {
-    localStorage.removeItem("user")
+    logout()
     window.location.href = "/login"
   }
 
@@ -91,9 +89,8 @@ function NavLink({ href, icon, label, active }: any) {
   return (
     <Link
       href={href}
-      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition ${
-        active ? "bg-blue-600 text-white" : "text-gray-400 hover:text-gray-200 hover:bg-gray-800"
-      }`}
+      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition ${active ? "bg-blue-600 text-white" : "text-gray-400 hover:text-gray-200 hover:bg-gray-800"
+        }`}
     >
       {icon}
       <span className="font-medium">{label}</span>
