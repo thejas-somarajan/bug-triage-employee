@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { register } from "@/lib/auth"
+import { useToast } from "@/hooks/use-toast"
 
 export default function RegisterPage() {
     const router = useRouter()
@@ -15,11 +16,11 @@ export default function RegisterPage() {
         email: "",
         password: "",
         confirmPassword: "",
-        role: "user" as "user" | "admin",
+        role: "employee" as "employee" | "admin",
     })
     const [isLoading, setIsLoading] = useState(false)
-    const [error, setError] = useState<string | null>(null)
     const [success, setSuccess] = useState(false)
+    const { toast } = useToast()
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }))
@@ -27,14 +28,20 @@ export default function RegisterPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
-        setError(null)
-
         if (form.password !== form.confirmPassword) {
-            setError("Passwords do not match.")
+            toast({
+                variant: "destructive",
+                title: "Validation Error",
+                description: "Passwords do not match.",
+            })
             return
         }
         if (form.password.length < 6) {
-            setError("Password must be at least 6 characters.")
+            toast({
+                variant: "destructive",
+                title: "Validation Error",
+                description: "Password must be at least 6 characters.",
+            })
             return
         }
 
@@ -42,9 +49,17 @@ export default function RegisterPage() {
         try {
             await register(form.username, form.email, form.password, form.role)
             setSuccess(true)
+            toast({
+                title: "Account Created",
+                description: "Redirecting to login...",
+            })
             setTimeout(() => router.push("/login"), 2000)
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Registration failed. Please try again.")
+            toast({
+                variant: "destructive",
+                title: "Registration Failed",
+                description: err instanceof Error ? err.message : "Registration failed. Please try again.",
+            })
         } finally {
             setIsLoading(false)
         }
@@ -143,17 +158,10 @@ export default function RegisterPage() {
                             disabled={success}
                             className="w-full px-3 py-2 rounded-md bg-[#1f2937] border border-gray-700 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                         >
-                            <option value="user">Employee (user)</option>
+                            <option value="employee">Employee</option>
                             <option value="admin">Administrator (admin)</option>
                         </select>
                     </div>
-
-                    {/* Error */}
-                    {error && (
-                        <div className="rounded-lg bg-red-900/30 border border-red-700/50 px-4 py-3 text-red-400 text-sm">
-                            {error}
-                        </div>
-                    )}
 
                     <Button
                         type="submit"
@@ -172,7 +180,7 @@ export default function RegisterPage() {
                 </p>
 
                 <p className="text-center text-gray-600 text-xs mt-8">© 2025 DevTracker Inc. All rights reserved.</p>
-            </div>
-        </div>
+            </div >
+        </div >
     )
 }

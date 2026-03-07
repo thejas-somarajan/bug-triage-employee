@@ -65,7 +65,13 @@ export async function apiFetch<T = unknown>(
         let errorMsg = `API error: ${response.status} ${response.statusText}`
         try {
             const errBody = await response.json()
-            if (errBody?.detail) errorMsg = String(errBody.detail)
+            if (errBody?.error?.description) {
+                errorMsg = String(errBody.error.description)
+            } else if (errBody?.message) {
+                errorMsg = String(errBody.message)
+            } else if (errBody?.detail) {
+                errorMsg = String(errBody.detail)
+            }
         } catch {
             // ignore parse error
         }
@@ -95,7 +101,13 @@ export async function apiFetchForm<T = unknown>(
         let errorMsg = `Login failed (${response.status}): Invalid username or password`
         try {
             const errBody = await response.json()
-            if (errBody?.detail) errorMsg = String(errBody.detail)
+            if (errBody?.error?.description) {
+                errorMsg = String(errBody.error.description)
+            } else if (errBody?.message) {
+                errorMsg = String(errBody.message)
+            } else if (errBody?.detail) {
+                errorMsg = String(errBody.detail)
+            }
         } catch {
             // ignore
         }

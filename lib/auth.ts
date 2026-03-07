@@ -57,7 +57,7 @@ export async function register(
     username: string,
     email: string,
     password: string,
-    role: "user" | "admin" = "user"
+    role: "employee" | "admin" = "employee"
 ): Promise<Employee> {
     const res = await apiFetch<ApiResponse<Employee>>("/register", {
         method: "POST",
