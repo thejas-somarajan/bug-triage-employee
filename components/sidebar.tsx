@@ -33,12 +33,12 @@ export function Sidebar() {
       {user && (
         <div className="p-4 border-b border-gray-800">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-400 to-pink-500 flex items-center justify-center text-white font-bold">
-              {user.name.charAt(0)}
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-400 to-pink-500 flex items-center justify-center text-white font-bold uppercase">
+              {(user.username || "?").charAt(0)}
             </div>
             <div>
-              <p className="text-sm font-semibold text-white">{user.name}</p>
-              <p className="text-xs text-gray-400">Frontend Eng.</p>
+              <p className="text-sm font-semibold text-white">{user.username}</p>
+              <p className="text-xs text-gray-400 capitalize">{user.role || "Employee"}</p>
             </div>
           </div>
         </div>

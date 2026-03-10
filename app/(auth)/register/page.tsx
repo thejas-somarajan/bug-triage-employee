@@ -7,7 +7,6 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { register } from "@/lib/auth"
-import { useToast } from "@/hooks/use-toast"
 
 export default function RegisterPage() {
     const router = useRouter()
@@ -19,8 +18,8 @@ export default function RegisterPage() {
         role: "employee" as "employee" | "admin",
     })
     const [isLoading, setIsLoading] = useState(false)
+    const [error, setError] = useState<string | null>(null)
     const [success, setSuccess] = useState(false)
-    const { toast } = useToast()
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }))
@@ -28,20 +27,14 @@ export default function RegisterPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
+        setError(null)
+
         if (form.password !== form.confirmPassword) {
-            toast({
-                variant: "destructive",
-                title: "Validation Error",
-                description: "Passwords do not match.",
-            })
+            setError("Passwords do not match.")
             return
         }
         if (form.password.length < 6) {
-            toast({
-                variant: "destructive",
-                title: "Validation Error",
-                description: "Password must be at least 6 characters.",
-            })
+            setError("Password must be at least 6 characters.")
             return
         }
 
@@ -49,17 +42,9 @@ export default function RegisterPage() {
         try {
             await register(form.username, form.email, form.password, form.role)
             setSuccess(true)
-            toast({
-                title: "Account Created",
-                description: "Redirecting to login...",
-            })
             setTimeout(() => router.push("/login"), 2000)
         } catch (err) {
-            toast({
-                variant: "destructive",
-                title: "Registration Failed",
-                description: err instanceof Error ? err.message : "Registration failed. Please try again.",
-            })
+            setError(err instanceof Error ? err.message : "Registration failed. Please try again.")
         } finally {
             setIsLoading(false)
         }
@@ -163,6 +148,13 @@ export default function RegisterPage() {
                         </select>
                     </div>
 
+                    {/* Error */}
+                    {error && (
+                        <div className="rounded-lg bg-red-900/30 border border-red-700/50 px-4 py-3 text-red-400 text-sm">
+                            {error}
+                        </div>
+                    )}
+
                     <Button
                         type="submit"
                         disabled={isLoading || success}
@@ -180,7 +172,7 @@ export default function RegisterPage() {
                 </p>
 
                 <p className="text-center text-gray-600 text-xs mt-8">© 2025 DevTracker Inc. All rights reserved.</p>
-            </div >
-        </div >
+            </div>
+        </div>
     )
 }
