@@ -15,7 +15,7 @@ export default function RegisterPage() {
         email: "",
         password: "",
         confirmPassword: "",
-        role: "user" as "user" | "admin",
+        role: "employee" as "employee" | "admin",
     })
     const [isLoading, setIsLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
@@ -143,7 +143,7 @@ export default function RegisterPage() {
                             disabled={success}
                             className="w-full px-3 py-2 rounded-md bg-[#1f2937] border border-gray-700 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                         >
-                            <option value="user">Employee (user)</option>
+                            <option value="employee">Employee</option>
                             <option value="admin">Administrator (admin)</option>
                         </select>
                     </div>

@@ -7,20 +7,15 @@ function getToken(): string | null {
     return localStorage.getItem("token")
 }
 
-/** Clear auth and redirect to login — called automatically on 401/403 */
-function handleAuthError(status: number): never {
+/** Clear auth and redirect to login — called automatically on 401 */
+function handleAuthExpired(): never {
     if (typeof window !== "undefined") {
         localStorage.removeItem("token")
         localStorage.removeItem("user")
-        const reason = status === 403
-            ? "?error=forbidden"
-            : "?error=session_expired"
-        window.location.href = `/login${reason}`
+        localStorage.removeItem("role")
+        window.location.href = "/login?error=session_expired"
     }
-    throw new Error(status === 403
-        ? "403: Access denied. Make sure you are logged in with an employee (user) account, not an admin account."
-        : "401: Session expired. Please log in again."
-    )
+    throw new Error("401: Session expired. Please log in again.")
 }
 
 interface FetchOptions extends RequestInit {
@@ -46,7 +41,7 @@ export async function apiFetch<T = unknown>(
         const token = getToken()
         if (!token) {
             // No token at all — redirect to login immediately
-            handleAuthError(401)
+            handleAuthExpired()
         }
         headers["Authorization"] = `Bearer ${token}`
     }
@@ -57,8 +52,8 @@ export async function apiFetch<T = unknown>(
     })
 
     // Handle auth errors centrally
-    if (response.status === 401 || response.status === 403) {
-        handleAuthError(response.status)
+    if (response.status === 401) {
+        handleAuthExpired()
     }
 
     if (!response.ok) {

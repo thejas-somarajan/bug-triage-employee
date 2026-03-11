@@ -7,12 +7,14 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Github } from "lucide-react"
-import { login } from "@/lib/auth"
+import { login, getRole } from "@/lib/auth"
 
 const AUTH_MESSAGES: Record<string, string> = {
   session_expired: "Your session has expired. Please log in again.",
   forbidden:
     "Access denied (403). The employee portal requires a user (employee) account — not an admin account. Please log in with the correct credentials.",
+  admin_account:
+    "This is the Employee Portal. Admin accounts must use the Admin Portal instead. Please log in with an employee account.",
 }
 
 export default function LoginPage() {
@@ -39,7 +41,15 @@ export default function LoginPage() {
 
     try {
       await login(username, password)
-      router.push("/dashboard")
+      const role = getRole()
+      if (role === "admin") {
+        // Admin accounts belong to the separate Admin Portal.
+        // Redirect back to login with an informative message instead of
+        // hitting /employee/* endpoints that would return 403.
+        router.push("/login?error=admin_account")
+      } else {
+        router.push("/dashboard")
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed. Please check your credentials.")
     } finally {
@@ -104,8 +114,8 @@ export default function LoginPage() {
           {/* Error message */}
           {error && (
             <div className={`rounded-lg px-4 py-3 text-sm ${error.startsWith("Access denied")
-                ? "bg-orange-900/30 border border-orange-700/50 text-orange-300"
-                : "bg-red-900/30 border border-red-700/50 text-red-400"
+              ? "bg-orange-900/30 border border-orange-700/50 text-orange-300"
+              : "bg-red-900/30 border border-red-700/50 text-red-400"
               }`}>
               {error}
             </div>

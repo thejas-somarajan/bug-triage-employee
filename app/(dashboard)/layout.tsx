@@ -6,7 +6,7 @@ import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { isAuthenticated } from "@/lib/auth"
+import { isAuthenticated, getRole, isEmployee, resolveEmployeeRole } from "@/lib/auth"
 
 export default function DashboardLayout({
   children,
@@ -19,8 +19,30 @@ export default function DashboardLayout({
   useEffect(() => {
     if (!isAuthenticated()) {
       router.push("/login")
+      return
+    }
+
+    const cachedRole = getRole()
+
+    if (cachedRole !== null) {
+      // Role is already known — make the decision immediately
+      if (isEmployee()) {
+        setIsLoaded(true)
+      } else {
+        // Authenticated but not an employee (e.g. admin) — bounce before
+        // any /employee/* API calls are made.
+        router.push("/login?error=forbidden")
+      }
     } else {
-      setIsLoaded(true)
+      // No role cached: this is a stale session from before the role key
+      // was introduced. Fetch /employee to resolve the role, then decide.
+      resolveEmployeeRole().then((role) => {
+        if (role === "employee") {
+          setIsLoaded(true)
+        } else {
+          router.push("/login?error=forbidden")
+        }
+      })
     }
   }, [router])
 

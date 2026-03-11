@@ -37,6 +37,7 @@ export interface Notification {
 export interface LoginResponse {
     access_token: string
     token_type: string
+    role: string
 }
 
 export interface ApiResponse<T> {
