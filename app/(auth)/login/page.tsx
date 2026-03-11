@@ -134,12 +134,8 @@ export default function LoginPage() {
           Sign in with GitHub
         </Button>
 
-        <p className="text-center text-gray-400 text-sm mt-6">
-          Don&apos;t have an account?{" "}
-          <Link href="/register" className="text-blue-500 hover:text-blue-400 font-medium">
-            Register
-          </Link>
-        </p>
+
+
 
         <p className="text-center text-gray-600 text-xs mt-8">© 2025 DevTracker Inc. All rights reserved.</p>
       </div>
