@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react"
 import { Card } from "@/components/ui/card"
 import { TrendingUp, AlertCircle, Loader2 } from "lucide-react"
-import { getMyTasks, updateTaskStatus, createTask } from "@/lib/tasks"
+import { getMyTasks, updateTaskStatus } from "@/lib/tasks"
 import { useNotifications } from "@/hooks/use-notifications"
 import type { ProjectWithTasks, TaskStatus } from "@/lib/types"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
@@ -69,6 +69,24 @@ const columnDotColour: Record<SprintStatus, string> = {
   Doing: "bg-yellow-500",
   Done: "bg-green-500",
   Review: "bg-purple-500",
+}
+
+// ─── Local cache helpers ───────────────────────────────────────────────────────
+const LOCAL_TASKS_KEY = "local_sprint_tasks"
+
+function getLocalTasks(): SprintItem[] {
+  if (typeof window === "undefined") return []
+  try {
+    const raw = localStorage.getItem(LOCAL_TASKS_KEY)
+    return raw ? (JSON.parse(raw) as SprintItem[]) : []
+  } catch {
+    return []
+  }
+}
+
+function saveLocalTasks(tasks: SprintItem[]): void {
+  if (typeof window === "undefined") return
+  localStorage.setItem(LOCAL_TASKS_KEY, JSON.stringify(tasks))
 }
 
 // ─── Confirmation Dialog ───────────────────────────────────────────────────────
@@ -142,7 +160,7 @@ export default function DashboardPage() {
         const data = await getMyTasks()
         setProjects(data)
         // Flatten all tasks from all projects into sprint items
-        const items: SprintItem[] = data.flatMap((proj) =>
+        const apiItems: SprintItem[] = data.flatMap((proj) =>
           proj.tasks.map((t) => ({
             id: `#${t.id}`,
             issueId: t.id,
@@ -152,9 +170,14 @@ export default function DashboardPage() {
             projectName: proj.project_name,
           }))
         )
-        setSprintData(items)
+        // Merge locally-cached tasks
+        const localItems = getLocalTasks()
+        setSprintData([...localItems, ...apiItems])
       } catch (err) {
         setTasksError(err instanceof Error ? err.message : "Failed to load tasks")
+        // Even on API error, still show locally-cached tasks
+        const localItems = getLocalTasks()
+        if (localItems.length > 0) setSprintData(localItems)
       } finally {
         setIsTasksLoading(false)
       }
@@ -172,7 +195,7 @@ export default function DashboardPage() {
     : 0
 
   const statsData = [
-    { title: "Open Issues", value: String(openCount), change: `${doingCount} in progress`, icon: AlertCircle, color: "text-blue-500" },
+    { title: "Open Issues", value: String(openCount), change: `${sprintData.length} total · ${doingCount} in progress`, icon: AlertCircle, color: "text-blue-500" },
     { title: "In Review", value: String(reviewCount), change: "Awaiting review", icon: "🔀", color: "text-purple-500" },
     { title: "Completed", value: String(doneCount), change: "Tasks done", icon: "🎯", color: "text-orange-500" },
     { title: "Efficiency", value: `${efficiency}%`, change: "Done / total tasks", icon: TrendingUp, color: "text-green-500" },
@@ -211,14 +234,23 @@ export default function DashboardPage() {
       prev.map((c) => (c.id === pending.id ? { ...c, status: pending.to } : c))
     )
     setPending(null)
-    // Persist to API
+
     const card = prevData.find((c) => c.id === pending.id)
     if (card) {
-      try {
-        await updateTaskStatus(card.issueId, sprintStatusToApi(pending.to))
-      } catch {
-        // Revert on failure
-        setSprintData(prevData)
+      // Local tasks have large Date.now() IDs — persist to cache, not API
+      const isLocalTask = card.issueId > 1_000_000_000_000
+      if (isLocalTask) {
+        const localTasks = getLocalTasks().map((t) =>
+          t.id === card.id ? { ...t, status: pending.to } : t
+        )
+        saveLocalTasks(localTasks)
+      } else {
+        try {
+          await updateTaskStatus(card.issueId, sprintStatusToApi(pending.to))
+        } catch {
+          // Revert on failure
+          setSprintData(prevData)
+        }
       }
     }
   }, [pending, sprintData])
@@ -270,16 +302,14 @@ export default function DashboardPage() {
               <span className="text-2xl">📋</span>
               Sprint Board
               <span className="ml-2 text-xs text-gray-500 font-normal italic mr-auto">drag cards between columns</span>
-              <CreateTaskDialog projects={projects} onTaskCreated={(newTask) => {
-                const item: SprintItem = {
-                  id: `#${newTask.id}`,
-                  issueId: newTask.id,
-                  title: newTask.title,
-                  status: "To Do",
-                  priority: newTask.priority || "MEDIUM",
-                  projectName: projects.find(p => p.project_id === newTask.project_id)?.project_name || "Unknown"
-                }
-                setSprintData(prev => [item, ...prev])
+              <CreateTaskDialog projects={projects} onTaskCreated={(newItem: SprintItem) => {
+                setSprintData(prev => {
+                  const updated = [newItem, ...prev]
+                  // Keep local cache in sync
+                  const localTasks = getLocalTasks()
+                  saveLocalTasks([newItem, ...localTasks])
+                  return updated
+                })
               }} />
             </h2>
 
@@ -451,7 +481,6 @@ function CreateTaskDialog({ projects, onTaskCreated }: { projects: ProjectWithTa
   const [title, setTitle] = useState("")
   const [priority, setPriority] = useState("MEDIUM")
   const [projectId, setProjectId] = useState<string>("")
-  const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
     if (projects.length > 0 && !projectId) {
@@ -459,25 +488,23 @@ function CreateTaskDialog({ projects, onTaskCreated }: { projects: ProjectWithTa
     }
   }, [projects, projectId])
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!title.trim()) return
 
-    setIsSubmitting(true)
-    try {
-      const res = await createTask({
-        title,
-        priority,
-        project_id: projectId ? parseInt(projectId) : undefined
-      })
-      onTaskCreated({ ...res.data, project_id: projectId ? parseInt(projectId) : undefined, priority })
-      setOpen(false)
-      setTitle("")
-    } catch (error) {
-      console.error("Failed to create task:", error)
-    } finally {
-      setIsSubmitting(false)
+    const localId = Date.now()
+    const newItem: SprintItem = {
+      id: `#${localId}`,
+      issueId: localId,
+      title: title.trim(),
+      status: "To Do",
+      priority,
+      projectName: projects.find(p => String(p.project_id) === projectId)?.project_name || "Local Task",
     }
+
+    onTaskCreated(newItem)
+    setOpen(false)
+    setTitle("")
   }
 
   return (
@@ -546,10 +573,10 @@ function CreateTaskDialog({ projects, onTaskCreated }: { projects: ProjectWithTa
             </Button>
             <Button
               type="submit"
-              disabled={isSubmitting || !title.trim()}
+              disabled={!title.trim()}
               className="bg-blue-600 hover:bg-blue-700 text-white min-w-[100px]"
             >
-              {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Create Task"}
+              Create Task
             </Button>
           </div>
         </form>
