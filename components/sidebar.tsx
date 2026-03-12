@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, Github, GitPullRequest, Settings, LogOut, LayoutGrid } from "lucide-react"
+import { LayoutDashboard, Github, Settings, LogOut, LayoutGrid } from "lucide-react"
 import { useState, useEffect } from "react"
 import { logout, getUser } from "@/lib/auth"
 
@@ -53,12 +53,6 @@ export function Sidebar() {
           active={pathname === "/dashboard"}
         />
         <NavLink href="/issues" icon={<Github className="w-5 h-5" />} label="Issues" active={pathname === "/issues"} />
-        <NavLink
-          href="/pull-requests"
-          icon={<GitPullRequest className="w-5 h-5" />}
-          label="Pull Requests"
-          active={pathname === "/pull-requests"}
-        />
         <NavLink
           href="/projects"
           icon={<LayoutGrid className="w-5 h-5" />}

@@ -78,6 +78,34 @@ Update the status of an assigned task.
 
 ---
 
+### POST `/employee/tasks`
+Manually create a task and assign it to yourself.
+
+**Access**: Authenticated (Employee specific)
+
+**Request Body**:
+```json
+{
+  "title": "Fix the header bug",
+  "priority": "HIGH",
+  "project_id": 1,        // Optional: Defaults to first project
+  "labels": ["bug"]       // Optional
+}
+```
+
+**Response** (200):
+```json
+{
+  "message": "Task created successfully.",
+  "data": {
+    "id": 123,
+    "title": "Fix the header bug"
+  }
+}
+```
+
+---
+
 ## 2. Employee Notifications API
 
 ### GET `/employee/notifications`

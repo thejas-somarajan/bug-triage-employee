@@ -17,3 +17,16 @@ export async function updateTaskStatus(
         body: JSON.stringify({ status }),
     })
 }
+
+/** Create a new task manually */
+export async function createTask(taskData: {
+    title: string
+    priority: string
+    project_id?: number
+    labels?: string[]
+}): Promise<any> {
+    return apiFetch("/employee/tasks", {
+        method: "POST",
+        body: JSON.stringify(taskData),
+    })
+}

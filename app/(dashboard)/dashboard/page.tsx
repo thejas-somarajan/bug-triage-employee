@@ -3,9 +3,15 @@
 import { useState, useRef, useEffect, useCallback } from "react"
 import { Card } from "@/components/ui/card"
 import { TrendingUp, AlertCircle, Loader2 } from "lucide-react"
-import { getMyTasks, updateTaskStatus } from "@/lib/tasks"
+import { getMyTasks, updateTaskStatus, createTask } from "@/lib/tasks"
 import { useNotifications } from "@/hooks/use-notifications"
 import type { ProjectWithTasks, TaskStatus } from "@/lib/types"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Plus } from "lucide-react"
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 type SprintStatus = "To Do" | "Doing" | "Done" | "Review"
@@ -263,7 +269,18 @@ export default function DashboardPage() {
             <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
               <span className="text-2xl">📋</span>
               Sprint Board
-              <span className="ml-2 text-xs text-gray-500 font-normal italic">drag cards between columns</span>
+              <span className="ml-2 text-xs text-gray-500 font-normal italic mr-auto">drag cards between columns</span>
+              <CreateTaskDialog projects={projects} onTaskCreated={(newTask) => {
+                const item: SprintItem = {
+                  id: `#${newTask.id}`,
+                  issueId: newTask.id,
+                  title: newTask.title,
+                  status: "To Do",
+                  priority: newTask.priority || "MEDIUM",
+                  projectName: projects.find(p => p.project_id === newTask.project_id)?.project_name || "Unknown"
+                }
+                setSprintData(prev => [item, ...prev])
+              }} />
             </h2>
 
             {/* Loading / Error states */}
@@ -427,5 +444,116 @@ export default function DashboardPage() {
         </div>
       </div>
     </>
+  )
+}
+function CreateTaskDialog({ projects, onTaskCreated }: { projects: ProjectWithTasks[], onTaskCreated: (task: any) => void }) {
+  const [open, setOpen] = useState(false)
+  const [title, setTitle] = useState("")
+  const [priority, setPriority] = useState("MEDIUM")
+  const [projectId, setProjectId] = useState<string>("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (projects.length > 0 && !projectId) {
+      setProjectId(String(projects[0].project_id))
+    }
+  }, [projects, projectId])
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!title.trim()) return
+
+    setIsSubmitting(true)
+    try {
+      const res = await createTask({
+        title,
+        priority,
+        project_id: projectId ? parseInt(projectId) : undefined
+      })
+      onTaskCreated({ ...res.data, project_id: projectId ? parseInt(projectId) : undefined, priority })
+      setOpen(false)
+      setTitle("")
+    } catch (error) {
+      console.error("Failed to create task:", error)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" className="bg-blue-600 hover:bg-blue-700 h-8 gap-1.5 px-3">
+          <Plus className="w-4 h-4" />
+          <span>Create Task</span>
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="bg-[#151b2e] border-gray-700 text-white sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Create New Task</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="title" className="text-gray-400">Task Title</Label>
+            <Input
+              id="title"
+              placeholder="What needs to be done?"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="bg-[#1c2540] border-gray-700 text-white placeholder:text-gray-500"
+              required
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="text-gray-400">Priority</Label>
+              <Select value={priority} onValueChange={setPriority}>
+                <SelectTrigger className="bg-[#1c2540] border-gray-700 text-white">
+                  <SelectValue placeholder="Priority" />
+                </SelectTrigger>
+                <SelectContent className="bg-[#1c2540] border-gray-700 text-white">
+                  <SelectItem value="LOW">Low</SelectItem>
+                  <SelectItem value="MEDIUM">Medium</SelectItem>
+                  <SelectItem value="HIGH">High</SelectItem>
+                  <SelectItem value="CRITICAL">Critical</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-gray-400">Project</Label>
+              <Select value={projectId} onValueChange={setProjectId}>
+                <SelectTrigger className="bg-[#1c2540] border-gray-700 text-white">
+                  <SelectValue placeholder="Project" />
+                </SelectTrigger>
+                <SelectContent className="bg-[#1c2540] border-gray-700 text-white">
+                  {projects.map(p => (
+                    <SelectItem key={p.project_id} value={String(p.project_id)}>
+                      {p.project_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="pt-4 flex justify-end gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setOpen(false)}
+              className="border-gray-700 text-gray-400 hover:bg-gray-800"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={isSubmitting || !title.trim()}
+              className="bg-blue-600 hover:bg-blue-700 text-white min-w-[100px]"
+            >
+              {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Create Task"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }

@@ -27,7 +27,6 @@ This is an **Employee Management Dashboard** (also called **GitDash / DevTracker
 - **View a Sprint Board** — a Kanban-style board where tasks can be dragged between columns: *To Do → Doing → Review → Done*.
 - **Browse Issues** — a searchable, filterable table of every task assigned to them.
 - **View Projects** — cards showing the progress of each project they belong to.
-- **See Pull Requests** — a static display of code review items.
 - **Receive Notifications** — both from the REST API and in real-time via WebSockets.
 
 ---
@@ -63,8 +62,7 @@ Employee Management Dashboard/
 │       ├── layout.tsx          ← Dashboard layout — auth guard + sidebar + header
 │       ├── dashboard/page.tsx  ← Main dashboard with Sprint Board
 │       ├── issues/page.tsx     ← Issues list (table view)
-│       ├── projects/page.tsx   ← Projects grid (card view)
-│       └── pull-requests/page.tsx ← Pull requests list (static demo data)
+│       └── projects/page.tsx   ← Projects grid (card view)
 │
 ├── components/                 ← 🧩 REUSABLE COMPONENTS
 │   ├── header.tsx              ← Top header bar (search + notification bell)
@@ -191,7 +189,7 @@ login/page.tsx calls login() from lib/auth.ts
 
 ## 6. The Dashboard Layout (Sidebar + Header + Page)
 
-When a user visits any page under `/dashboard`, `/issues`, `/projects`, or `/pull-requests`, the **dashboard layout** (`app/(dashboard)/layout.tsx`) wraps around it:
+When a user visits any page under `/dashboard`, `/issues`, or `/projects`, the **dashboard layout** (`app/(dashboard)/layout.tsx`) wraps around it:
 
 ```tsx
 <div className="flex h-screen">
