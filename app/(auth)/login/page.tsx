@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -17,7 +17,7 @@ const AUTH_MESSAGES: Record<string, string> = {
     "This is the Employee Portal. Admin accounts must use the Admin Portal instead. Please log in with an employee account.",
 }
 
-export default function LoginPage() {
+function LoginContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [username, setUsername] = useState("")
@@ -43,9 +43,6 @@ export default function LoginPage() {
       await login(username, password)
       const role = getRole()
       if (role === "admin") {
-        // Admin accounts belong to the separate Admin Portal.
-        // Redirect back to login with an informative message instead of
-        // hitting /employee/* endpoints that would return 403.
         router.push("/login?error=admin_account")
       } else {
         router.push("/dashboard")
@@ -111,7 +108,6 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* Error message */}
           {error && (
             <div className={`rounded-lg px-4 py-3 text-sm ${error.startsWith("Access denied")
               ? "bg-orange-900/30 border border-orange-700/50 text-orange-300"
@@ -144,11 +140,16 @@ export default function LoginPage() {
           Sign in with GitHub
         </Button>
 
-
-
-
         <p className="text-center text-gray-600 text-xs mt-8">© 2025 DevTracker Inc. All rights reserved.</p>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginContent />
+    </Suspense>
   )
 }
